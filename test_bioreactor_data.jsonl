@@ -1,0 +1,10 @@
+{"sensor_id": "BioR1", "timestamp": "2025-08-16 14:00", "ph_value": 7.2, "temperature": 37.5}
+{"sensor_id": "BioR1", "timestamp": "2025-08-16 14:30", "ph_value": 7.1, "temperature": 45.0}
+{"sensor_id": "BioR1", "timestamp": "2025-08-16 15:00", "ph_value": 7.3, "temperature": 18.5}
+{"sensor_id": "BioR2", "timestamp": "2025-08-16 14:00", "ph_value": -1.0, "temperature": 25.0}
+{"sensor_id": "BioR2", "timestamp": "2025-08-16 14:30", "ph_value": 6.9, "temperature": 30.0}
+{"sensor_id": "BioR3", "timestamp": "2025-08-16 14:00", "ph_value": "invalid", "temperature": 35.0}
+{"sensor_id": "BioR3", "timestamp": "2025-08-16 14:30", "ph_value": 7.0, "temperature": "not_a_number"}
+{"sensor_id": "", "timestamp": "2025-08-16 14:00", "ph_value": 7.4, "temperature": 38.0}
+{"sensor_id": "BioR4", "timestamp": "", "ph_value": 7.5, "temperature": 39.0}
+{"sensor_id": "BioR4", "timestamp": "2025-08-16 14:00", "ph_value": 7.6, "temperature": -5.0}

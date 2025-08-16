@@ -15,6 +15,9 @@ from datetime import datetime
 from typing import List, Dict, Tuple
 from collections import defaultdict
 
+from ingestion_layer import IngestionLayer
+from validation_layer import ValidationLayer
+
 @dataclass(frozen=True)
 class SensorReading:
     sensor_id: str
@@ -31,6 +34,19 @@ class SensorResult:
     def to_tuple(self) -> Tuple[float, int, str]:
         return (self.avg_ph, self.anomaly_count, self.latest_timestamp)
 
+
+
+# pipeline.py
+def process_pipeline(source: str, chunk_size: int = 1000):
+    ingestion_layer = IngestionLayer(chunk_size=chunk_size)
+    validation_layer = ValidationLayer()
+    
+    for chunk in ingestion_layer.ingest(source):
+        valid_chunk = validation_layer.filter_chunk(chunk)
+        if valid_chunk:
+            # Process and yield immediately
+            yield process_data(valid_chunk)
+            
 def process_data(readings: List[SensorReading]) -> Dict[str, Tuple[float, int, str]]:
     sensor_data = defaultdict(lambda: {
         'ph_sum': 0,
