@@ -1,4 +1,5 @@
 from bioprocessing import process_data, process_pipeline
+from unittest.mock import patch
 
 MOCK_INPUT_READINGS = [
     {"sensor_id": "BioR1", "timestamp": "2025-08-16 14:00", "ph_value": 7.2, "temperature": 37.5},
@@ -29,3 +30,22 @@ def test_process_pipeline():
     assert isinstance(bio1_result[0], float)  # avg_ph
     assert isinstance(bio1_result[1], int)    # anomaly_count
     assert isinstance(bio1_result[2], str)    # latest_timestamp
+
+
+def test_process_pipeline_file_auto_detection():
+    """The factory should pick FileIngestionLayer for a local path."""
+    with patch('bioprocessing.FileIngestionLayer.ingest') as mock_ingest:
+        # Mock one chunk yielded from the file layer
+        mock_ingest.return_value = iter([MOCK_INPUT_READINGS])
+        results = next(process_pipeline("test_bioreactor_data.jsonl"))
+        mock_ingest.assert_called_once()          # File layer really used
+        assert results == MOCK_EXPECTED_OUTPUT     # Data still processed correctly
+
+
+def test_process_pipeline_api_auto_detection():
+    """The factory should pick APIIngestionLayer for an HTTP URL."""
+    with patch('bioprocessing.APIIngestionLayer.ingest') as mock_ingest:
+        mock_ingest.return_value = iter([MOCK_INPUT_READINGS])
+        results = next(process_pipeline("https://api.example.com/sensors"))
+        mock_ingest.assert_called_once()          # API layer really used
+        assert results == MOCK_EXPECTED_OUTPUT     # Data still processed correctly

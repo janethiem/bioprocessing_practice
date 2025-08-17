@@ -12,10 +12,12 @@ Return a dict with sensor_id as keys and a tuple of (avg_ph, anomaly_count, late
 
 from dataclasses import dataclass
 from datetime import datetime
+import os
 from typing import List, Dict, Tuple
 from collections import defaultdict
+from urllib.parse import urlparse
 
-from ingestion_layer import IngestionLayer
+from ingestion_layer import IngestionLayer, APIIngestionLayer, FileIngestionLayer
 from validation_layer import ValidationLayer
 
 @dataclass(frozen=True)
@@ -34,11 +36,62 @@ class SensorResult:
     def to_tuple(self) -> Tuple[float, int, str]:
         return (self.avg_ph, self.anomaly_count, self.latest_timestamp)
 
+class IngestionLayerFactory:
+    """Factory for creating appropriate ingestion layer based on source."""
 
+    @staticmethod
+    def create_ingestion_layer(source: str, chunk_size: int = 1000, **kwargs) -> IngestionLayer:
+        """
+        Create appropriate ingestion layer based on source.
+        
+        Args:
+            source: Data source (file path, URL, etc.)
+            chunk_size: Number of readings per chunk
+            **kwargs: Additional parameters for specific layers
+            
+        Returns:
+            Appropriate ingestion layer instance
+            
+        Raises:
+            ValueError: If source type cannot be determined
+        """
 
-# pipeline.py
-def process_pipeline(source: str, chunk_size: int = 1000):
-    ingestion_layer = IngestionLayer(chunk_size=chunk_size)
+        # Check if the source is a URL (API source)
+        parsed_url = urlparse(source)
+        if parsed_url.scheme in ['http', 'https']:
+            return APIIngestionLayer(chunk_size=chunk_size, timeout=kwargs.get('timeout', 30))
+
+        # Check if it's a file path
+        if os.path.isfile(source) or source.endswith(('.json', '.jsonl', '.txt', '.csv')):
+            return FileIngestionLayer(
+                chunk_size=chunk_size,
+                encoding=kwargs.get('encoding', 'utf-8')
+            )
+        
+        # Could add more detection logic here:
+        # - Database connections (check for connection strings)
+        # - S3 URLs (s3://)
+        # - FTP URLs (ftp://)
+        # - Streaming sources, etc.
+        
+        raise ValueError(f"Cannot determine ingestion layer for source: {source}")
+        
+
+def process_pipeline(source: str, chunk_size: int = 1000, **ingestion_kwargs):
+    """
+    Process data pipeline with automatic ingestion layer detection.
+    
+    Args:
+        source: Data source (file path, URL, etc.)
+        chunk_size: Number of readings per chunk
+        **ingestion_kwargs: Additional parameters for ingestion layers
+        
+    Yields:
+        Processed sensor data chunks
+    """
+    ingestion_layer = IngestionLayerFactory.create_ingestion_layer(
+        source, chunk_size, **ingestion_kwargs
+    )
     validation_layer = ValidationLayer()
     
     for chunk in ingestion_layer.ingest(source):
