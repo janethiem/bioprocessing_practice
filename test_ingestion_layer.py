@@ -1,6 +1,6 @@
 import requests
 from unittest.mock import patch, Mock
-from ingestion_layer import FileIngestionLayer, APIIngestionLayer
+from ingestion_layer import FileIngestionLayer, APIIngestionLayer, S3IngestionLayer
 import pytest
 
 class TestFileIngestionLayer:
@@ -79,3 +79,69 @@ class TestAPIIngestionLayer:
         list(layer.ingest("http://test-api.com/data"))
         
         mock_get.assert_called_with("http://test-api.com/data?page=1", timeout=60)
+
+# Note this test requires the mock S3 bucket to be running.
+# Run setup_mock_s3.py to create the bucket and upload the sample data.
+class TestS3IngestionLayer:
+
+    def test_ingest_from_s3_local(self):
+        layer = S3IngestionLayer(
+            bucket_name='mock-bioprocess-bucket',
+            object_key='test_bioreactor_data.jsonl',
+            chunk_size=3,  # Use smaller chunk size to test chunking
+            endpoint_url='http://localhost:4566'
+        )
+        chunks = list(layer.ingest())
+        
+        # Expected data from test_bioreactor_data.jsonl (10 lines total)
+        expected_data = [
+            {"sensor_id": "BioR1", "timestamp": "2025-08-16 14:00", "ph_value": 7.2, "temperature": 37.5},
+            {"sensor_id": "BioR1", "timestamp": "2025-08-16 14:30", "ph_value": 7.1, "temperature": 45.0},
+            {"sensor_id": "BioR1", "timestamp": "2025-08-16 15:00", "ph_value": 7.3, "temperature": 18.5},
+            {"sensor_id": "BioR2", "timestamp": "2025-08-16 14:00", "ph_value": -1.0, "temperature": 25.0},
+            {"sensor_id": "BioR2", "timestamp": "2025-08-16 14:30", "ph_value": 6.9, "temperature": 30.0},
+            {"sensor_id": "BioR3", "timestamp": "2025-08-16 14:00", "ph_value": "invalid", "temperature": 35.0},
+            {"sensor_id": "BioR3", "timestamp": "2025-08-16 14:30", "ph_value": 7.0, "temperature": "not_a_number"},
+            {"sensor_id": "", "timestamp": "2025-08-16 14:00", "ph_value": 7.4, "temperature": 38.0},
+            {"sensor_id": "BioR4", "timestamp": "", "ph_value": 7.5, "temperature": 39.0},
+            {"sensor_id": "BioR4", "timestamp": "2025-08-16 14:00", "ph_value": 7.6, "temperature": -5.0}
+        ]
+        
+        # With chunk_size=3, we should get 4 chunks: [3, 3, 3, 1]
+        assert len(chunks) == 4
+        assert len(chunks[0]) == 3
+        assert len(chunks[1]) == 3  
+        assert len(chunks[2]) == 3
+        assert len(chunks[3]) == 1
+        
+        # Flatten chunks and verify all data is present
+        all_data = []
+        for chunk in chunks:
+            all_data.extend(chunk)
+        
+        assert len(all_data) == 10
+        assert all_data == expected_data
+
+    def test_s3_error_handling(self):
+        # Test with non-existent bucket
+        layer = S3IngestionLayer(
+            bucket_name='non-existent-bucket',
+            object_key='test_bioreactor_data.jsonl',
+            chunk_size=100,
+            endpoint_url='http://localhost:4566'
+        )
+        
+        with pytest.raises(ValueError, match="Error fetching from S3"):
+            list(layer.ingest())
+    
+    def test_s3_non_existent_object(self):
+        # Test with non-existent object in existing bucket
+        layer = S3IngestionLayer(
+            bucket_name='mock-bioprocess-bucket',
+            object_key='non-existent-file.jsonl',
+            chunk_size=100,
+            endpoint_url='http://localhost:4566'
+        )
+        
+        with pytest.raises(ValueError, match="Error fetching from S3"):
+            list(layer.ingest())
