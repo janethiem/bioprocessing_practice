@@ -11,14 +11,12 @@ Return a dict with sensor_id as keys and a tuple of (avg_ph, anomaly_count, late
 """
 
 from dataclasses import dataclass
-from datetime import datetime
 import os
-from typing import List, Dict, Tuple
-from collections import defaultdict
+from typing import Tuple
 from urllib.parse import urlparse
 
-from ingestion_layer import IngestionLayer, APIIngestionLayer, FileIngestionLayer
-from validation_layer import ValidationLayer
+from core.ingestion import IngestionLayer, APIIngestionLayer, FileIngestionLayer
+from core.validation import SensorAggregator, ValidationLayer
 
 @dataclass(frozen=True)
 class SensorReading:
@@ -79,28 +77,33 @@ class IngestionLayerFactory:
 
 def process_pipeline(source: str, chunk_size: int = 1000, **ingestion_kwargs):
     """
-    Process data pipeline with automatic ingestion layer detection.
+    Process data pipeline with efficient single-pass aggregation.
     
     Args:
         source: Data source (file path, URL, etc.)
         chunk_size: Number of readings per chunk
         **ingestion_kwargs: Additional parameters for ingestion layers
         
-    Yields:
-        Processed sensor data chunks
+    Returns:
+        Final aggregated sensor data as dict
     """
     ingestion_layer = IngestionLayerFactory.create_ingestion_layer(
         source, chunk_size, **ingestion_kwargs
     )
-    validation_layer = ValidationLayer()
+    aggregator = SensorAggregator()
     
     for chunk in ingestion_layer.ingest(source):
-        valid_chunk = validation_layer.filter_chunk(chunk)
-        if valid_chunk:
-            # Process and yield immediately
-            yield process_data(valid_chunk)
+        aggregator.process_chunk(chunk)
+    
+    return aggregator.get_results()
+
             
-def process_data(readings: List[SensorReading]) -> Dict[str, Tuple[float, int, str]]:
+# Legacy function kept for backward compatibility
+def process_data(readings):
+    """Legacy function - prefer using SensorAggregator for new code."""
+    from collections import defaultdict
+    from datetime import datetime
+    
     sensor_data = defaultdict(lambda: {
         'ph_sum': 0,
         'ph_count': 0,
@@ -108,15 +111,16 @@ def process_data(readings: List[SensorReading]) -> Dict[str, Tuple[float, int, s
         'latest_timestamp_str': None,
         'latest_timestamp_obj': None
     })
+    
     for reading in readings:
-        # Filter out invalid readings (non-numeric/negative ph_value or temperature, missing sensor_id or timestamp).
+        # Filter out invalid readings
         sensor_id = reading.get("sensor_id")
         ph_value = reading.get("ph_value")
         temperature = reading.get("temperature")
         timestamp = reading.get("timestamp")
         if not sensor_id or not timestamp or not ph_value or not temperature:
             continue
-        if not isinstance(ph_value, float) or not isinstance(temperature, float):
+        if not isinstance(ph_value, (int, float)) or not isinstance(temperature, (int, float)):
             continue
         if ph_value < 0 or temperature < 0:
             continue
@@ -139,11 +143,27 @@ def process_data(readings: List[SensorReading]) -> Dict[str, Tuple[float, int, s
         if not sensor_data[sensor_id]['latest_timestamp_obj'] or timestamp_obj > sensor_data[sensor_id]['latest_timestamp_obj']:
             sensor_data[sensor_id]['latest_timestamp_obj'] = timestamp_obj
             sensor_data[sensor_id]['latest_timestamp_str'] = timestamp
+
     # Compute averages and format results
     results = {}
     for sensor_id, data in sensor_data.items():
         avg_ph = data['ph_sum'] / data['ph_count'] if data['ph_count'] > 0 else 0
-        results[sensor_id] = SensorResult(avg_ph=avg_ph, anomaly_count=data['anomaly_count'], latest_timestamp=data['latest_timestamp_str']).to_tuple()
+        results[sensor_id] = (avg_ph, data['anomaly_count'], data['latest_timestamp_str'])
     
     return results
-        
+
+# Keep the old streaming version for real-time use cases
+def process_pipeline_streaming(source: str, chunk_size: int = 1000, **ingestion_kwargs):
+    """
+    Streaming version that yields partial results per chunk.
+    Useful for real-time dashboards or when you need incremental updates.
+    """
+    ingestion_layer = IngestionLayerFactory.create_ingestion_layer(
+        source, chunk_size, **ingestion_kwargs
+    )
+    validation_layer = ValidationLayer()
+    
+    for chunk in ingestion_layer.ingest(source):
+        valid_chunk = validation_layer.filter_chunk(chunk)
+        if valid_chunk:
+            yield process_data(valid_chunk)

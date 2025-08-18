@@ -1,13 +1,21 @@
+import sys
+from pathlib import Path
 import requests
 from unittest.mock import patch, Mock
-from ingestion_layer import FileIngestionLayer, APIIngestionLayer, S3IngestionLayer
 import pytest
+
+# Add parent directory to path so we can import core modules
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+from core.ingestion import FileIngestionLayer, APIIngestionLayer, S3IngestionLayer
 
 class TestFileIngestionLayer:
     def test_file_ingestion_layer(self):
         """Test that ingestion layer reads all data without filtering."""
         file_ingestion_layer = FileIngestionLayer(chunk_size=3)
-        chunks = list(file_ingestion_layer.ingest("test_bioreactor_data.jsonl"))
+        # Use pathlib to get test data file path relative to this test script
+        test_data_path = Path(__file__).parent / "test_bioreactor_data.jsonl"
+        chunks = list(file_ingestion_layer.ingest(str(test_data_path)))
     
         # Should get 4 chunks (10 lines / 3 per chunk = 4 chunks)
         assert len(chunks) == 4
@@ -18,7 +26,7 @@ class TestFileIngestionLayer:
 
 class TestAPIIngestionLayer:
     
-    @patch('ingestion_layer.requests.get')
+    @patch('core.ingestion.api.requests.get')
     def test_successful_single_page_ingestion(self, mock_get):
         # Mock a single page response
         mock_response = Mock()
@@ -36,7 +44,7 @@ class TestAPIIngestionLayer:
         assert len(chunks[0]) == 2
         mock_get.assert_called_with("http://test-api.com/data?page=2", timeout=30)
 
-    @patch('ingestion_layer.requests.get')
+    @patch('core.ingestion.api.requests.get')
     def test_pagination_with_chunking(self, mock_get):
         # Mock multiple pages that exceed chunk size
         page1_data = [{"id": i} for i in range(7)]  # 7 items
@@ -61,7 +69,7 @@ class TestAPIIngestionLayer:
         assert len(chunks[0]) == 5  # First chunk: 5 items
         assert len(chunks[1]) == 5  # Second chunk: 2 from page1 + 3 from page2
 
-    @patch('ingestion_layer.requests.get')
+    @patch('core.ingestion.api.requests.get')
     def test_http_error_handling(self, mock_get):
         mock_get.side_effect = requests.HTTPError("404 Not Found")
         
@@ -70,7 +78,7 @@ class TestAPIIngestionLayer:
         with pytest.raises(requests.HTTPError):
             list(layer.ingest("http://test-api.com/nonexistent"))
 
-    @patch('ingestion_layer.requests.get')
+    @patch('core.ingestion.api.requests.get')
     def test_timeout_parameter(self, mock_get):
         layer = APIIngestionLayer(timeout=60)
         mock_get.return_value.json.return_value = []

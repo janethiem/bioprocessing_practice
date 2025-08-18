@@ -1,11 +1,15 @@
 import boto3
 import os
+from pathlib import Path
 
 # Config for LocalStack
 ENDPOINT_URL = 'http://localhost:4566'
 BUCKET_NAME = 'mock-bioprocess-bucket'
 OBJECT_KEY = 'test_bioreactor_data.jsonl'
-SAMPLE_FILE_PATH = 'test_bioreactor_data.jsonl'  # Adjust if your sample path differs
+
+# Use pathlib to compute file path relative to script location
+SCRIPT_DIR = Path(__file__).parent
+SAMPLE_FILE_PATH = SCRIPT_DIR / "../tests/test_bioreactor_data.jsonl"
 
 # Dummy creds for LocalStack
 s3 = boto3.client(
@@ -26,10 +30,10 @@ def create_bucket():
         print(f"Error creating bucket: {e}")
 
 def upload_sample_data():
-    if not os.path.exists(SAMPLE_FILE_PATH):
+    if not SAMPLE_FILE_PATH.exists():
         raise FileNotFoundError(f"Sample file not found: {SAMPLE_FILE_PATH}")
     try:
-        s3.upload_file(SAMPLE_FILE_PATH, BUCKET_NAME, OBJECT_KEY)
+        s3.upload_file(str(SAMPLE_FILE_PATH), BUCKET_NAME, OBJECT_KEY)
         print(f"Uploaded '{SAMPLE_FILE_PATH}' to '{BUCKET_NAME}/{OBJECT_KEY}'.")
     except Exception as e:
         print(f"Error uploading file: {e}")

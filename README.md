@@ -2,6 +2,16 @@
 
 A modular data pipeline for processing bioreactor sensor readings with anomaly detection, validation, and flexible ingestion from files or APIs.
 
+## Architecture
+
+The project is organized into a clean modular structure under the `core/` package:
+
+- `core/ingestion/` - Data ingestion layers (file, API, S3)
+- `core/validation/` - Data validation and aggregation logic  
+- `core/pipeline.py` - Main pipeline orchestration
+- `core/tests/` - Comprehensive test suite
+- `core/scripts/` - Utility scripts for setup and testing
+
 ## Features
 
 - **Multi-source ingestion**: Automatic detection and processing of file-based (JSON/JSONL), API, or S3 data sources
@@ -35,14 +45,14 @@ pip install localstack
 localstack start -d
 
 # Set up mock S3 bucket and data
-python setup_mock_s3.py
+python core/scripts/setup_mock_s3.py
 ```
 
 ## Usage
 
 ### Basic processing
 ```python
-from bioprocessing import process_data
+from core import process_data
 
 readings = [
     {"sensor_id": "BioR1", "timestamp": "2025-08-16 14:00", "ph_value": 7.2, "temperature": 37.5},
@@ -56,24 +66,24 @@ results = process_data(readings)
 
 ### Pipeline processing (recommended)
 ```python
-from bioprocessing import process_pipeline
+from core import process_pipeline
 
 # Process from file
-for results in process_pipeline("data.jsonl"):
-    print(results)
+results = process_pipeline("data.jsonl")
+print(results)
 
 # Process from API
-for results in process_pipeline("https://api.example.com/sensors"):
-    print(results)
+results = process_pipeline("https://api.example.com/sensors")
+print(results)
 
 # Custom chunk size
-for results in process_pipeline("data.jsonl", chunk_size=500):
-    print(results)
+results = process_pipeline("data.jsonl", chunk_size=500)
+print(results)
 ```
 
 ### S3 ingestion
 ```python
-from ingestion_layer import S3IngestionLayer
+from core.ingestion import S3IngestionLayer
 
 # For LocalStack (local development)
 layer = S3IngestionLayer(
@@ -112,37 +122,59 @@ pytest
 ### Run specific test suites:
 ```bash
 # Core processing logic
-pytest test_bioprocessing.py -v
+pytest core/tests/test_bioprocessing.py -v
 
 # Ingestion layer tests
-pytest test_ingestion_layer.py -v
+pytest core/tests/test_ingestion_layer.py -v
 
 # Validation layer tests  
-pytest test_validation_layer.py -v
+pytest core/tests/test_validation_layer.py -v
 
 # S3 ingestion tests (requires LocalStack running)
-python setup_mock_s3.py  # Set up test data first
-pytest test_ingestion_layer.py::TestS3IngestionLayer -v
+python core/scripts/setup_mock_s3.py  # Set up test data first
+pytest core/tests/test_ingestion_layer.py::TestS3IngestionLayer -v
 ```
 
 ### Run with coverage:
 ```bash
-pytest --cov=bioprocessing --cov=ingestion_layer --cov=validation_layer
+pytest --cov=core
 ```
 
-### TODO's Suggested by Intelligent Husband
-docker composification and add a database:
-    1. docker compose yaml file
-    2. dockerize your app
-    3. make the localstack s3 thing a docker container in your compose file
-    4. add mysql db as a container in docker compose
-    5. download sequel ace (macos GUI for visualization mysql DBs), connect to your db via the port, username, db name, password in the docker compose file
-    6. download orbstack (replacement for docker desktop that runs way better on macos), follow their install instructions to replace your existing docker desktop install
+## Future Enhancements
 
+*Suggestions from the intelligent husband* 😊
 
-monitoring:
-    1. add prometheus to your app (install it and instrument a few thing)
-    2. add prometheus server as a container in docker compose yaml and set it up to scrape the metrics
-    3. add a grafana container to docker compose, set it up to ingest the prometheus metrics
-    4. build some basic visualizations of your prometheus metrics in grafana
-    5. ask cursor to help you set up a situation that will exercise your prometheus code sufficiently to end up with enough metrics data that your graphs will have something interesting to show
+### 🐳 Docker Composification & Database Integration
+
+1. **Containerization Setup**
+   - [ ] Create `docker-compose.yaml` file
+   - [ ] Dockerize the bioprocessing application
+   - [ ] Add LocalStack S3 as a Docker container in compose file
+
+2. **Database Integration**
+   - [ ] Add MySQL database container to docker-compose
+   - [ ] Set up database schema for sensor readings
+   - [ ] Implement database persistence layer
+
+3. **Development Tools**
+   - [ ] Download [Sequel Ace](https://sequel-ace.com/) (macOS GUI for MySQL visualization)
+   - [ ] Configure database connection via docker-compose ports/credentials
+   - [ ] Download [OrbStack](https://orbstack.dev/) (better Docker Desktop replacement for macOS)
+
+### 📊 Monitoring & Observability
+
+1. **Prometheus Integration**
+   - [ ] Install and instrument Prometheus metrics in the application
+   - [ ] Add custom metrics for processing pipeline performance
+   - [ ] Track anomaly detection rates and processing times
+
+2. **Infrastructure Monitoring**
+   - [ ] Add Prometheus server container to docker-compose
+   - [ ] Configure metric scraping endpoints
+   - [ ] Set up service discovery for monitoring
+
+3. **Visualization & Dashboards**
+   - [ ] Add Grafana container to docker-compose
+   - [ ] Configure Grafana to ingest Prometheus metrics
+   - [ ] Build dashboards for pipeline performance and sensor data trends
+   - [ ] Create test scenarios to generate meaningful metrics data for visualization
